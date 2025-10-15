@@ -1,10 +1,6 @@
 import 'package:alarm_test_final/Alarm/alarm_service.dart';
 import 'package:alarm_test_final/model/medicine_model.dart';
 import 'package:flutter/material.dart';
-
-import 'dart:developer' as developer;
-
-
 import 'database/db_helper.dart';
 
 class AddMedicineScreen extends StatefulWidget {
@@ -143,7 +139,7 @@ class AddMedicineScreenState extends State<AddMedicineScreen> {
     }
   }
 
-  void _saveMedicine() async {
+void _saveMedicine() async {
     // Validate if date is selected
     if (_selectedEndDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -156,22 +152,29 @@ class AddMedicineScreenState extends State<AddMedicineScreen> {
     }
 
     if (_formKey.currentState!.validate()) {
-      final newMedicine = Medicine(
-        name: _nameController.text.trim(),
-        dosage: _dosageController.text.trim(),
-        type: _selectedType,
-        times: _selectedTimes,
-        frequency: _selectedFrequency,
-        pillCount: _pillCount,
-        instructions: _instructionsController.text.trim(),
-        intakeTime: _selectedIntakeTime,
-        color: _selectedColor,
-        isActive: true,
-        createdAt: DateTime.now(),
-        endDate: _selectedEndDate!,
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(child: CircularProgressIndicator()),
       );
 
       try {
+        final newMedicine = Medicine(
+          name: _nameController.text.trim(),
+          dosage: _dosageController.text.trim(),
+          type: _selectedType,
+          times: _selectedTimes,
+          frequency: _selectedFrequency,
+          pillCount: _pillCount,
+          instructions: _instructionsController.text.trim(),
+          intakeTime: _selectedIntakeTime,
+          color: _selectedColor,
+          isActive: true,
+          createdAt: DateTime.now(),
+          endDate: _selectedEndDate!,
+        );
+
         final dbHelper = DatabaseHelper();
         final medicineId = await dbHelper.insertMedicine(newMedicine);
 
@@ -184,6 +187,12 @@ class AddMedicineScreenState extends State<AddMedicineScreen> {
           medicineWithId,
         );
 
+        // Close loading dialog
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        }
+
+        // Show success message
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -195,9 +204,19 @@ class AddMedicineScreenState extends State<AddMedicineScreen> {
           ),
         );
 
+        // Call callback and navigate back
         widget.onMedicineAdded?.call();
-        Navigator.pop(context);
+
+        // Ensure we pop the screen
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        }
       } catch (e) {
+        // Close loading dialog on error
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        }
+
         debugPrint('Error inserting medicine: $e');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

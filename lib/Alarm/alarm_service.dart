@@ -1,19 +1,39 @@
+
+
 import 'package:alarm/alarm.dart';
 import 'package:flutter/material.dart';
 import '../database/db_helper.dart';
 import '../model/medicine_model.dart';
 
 class MedicineAlarmService {
-  static final MedicineAlarmService _instance =
-      MedicineAlarmService._internal();
+  static final MedicineAlarmService _instance = MedicineAlarmService._internal();
   factory MedicineAlarmService() => _instance;
   MedicineAlarmService._internal();
 
   final DatabaseHelper _dbHelper = DatabaseHelper();
+  bool _initialized = false;
+
+  /// Initialize alarm service
+  Future<void> initialize() async {
+    if (_initialized) return;
+    
+    try {
+      // Initialize Alarm
+      await Alarm.init();
+      _initialized = true;
+      debugPrint('✅ Alarm service initialized');
+    } catch (e) {
+      debugPrint('❌ Error initializing alarm: $e');
+    }
+  }
 
   /// Set alarms for a medicine
   Future<bool> setMedicineAlarms(Medicine medicine) async {
     try {
+      if (!_initialized) {
+        await initialize();
+      }
+
       // Cancel existing alarms for this medicine first
       await cancelMedicineAlarms(medicine.id!);
 
@@ -32,7 +52,12 @@ class MedicineAlarmService {
             timeIndex: i,
           );
 
-          if (!success) {
+          if (success) {
+            debugPrint(
+              '✅ Medicine alarm set: ${medicine.name} at ${_formatTime(time)} '
+              '(ID: $alarmId, Time: $alarmDateTime)',
+            );
+          } else {
             debugPrint(
               '❌ Failed to set alarm for medicine ${medicine.name} at ${_formatTime(time)}',
             );
@@ -49,19 +74,18 @@ class MedicineAlarmService {
 
   /// Generate unique alarm ID combining medicine ID and time index
   int _generateAlarmId(int medicineId, int timeIndex) {
-    return medicineId * 100 + timeIndex;
+    return medicineId * 1000 + timeIndex; // Use larger multiplier to avoid conflicts
   }
 
   /// Calculate the next alarm DateTime
   DateTime? _getNextAlarmDateTime(TimeOfDay time, DateTime endDate) {
     final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-
+    
     // Create DateTime for today with the selected time
     var alarmDateTime = DateTime(
-      today.year,
-      today.month,
-      today.day,
+      now.year,
+      now.month,
+      now.day,
       time.hour,
       time.minute,
     );
@@ -73,9 +97,11 @@ class MedicineAlarmService {
 
     // Check if alarm date is before end date
     if (alarmDateTime.isAfter(endDate)) {
+      debugPrint('⚠️ Alarm date $alarmDateTime is after end date $endDate - skipping');
       return null;
     }
 
+    debugPrint('📅 Next alarm for ${_formatTime(time)}: $alarmDateTime');
     return alarmDateTime;
   }
 
@@ -87,6 +113,9 @@ class MedicineAlarmService {
     required int timeIndex,
   }) async {
     try {
+      // Test with a time 1 minute from now for debugging
+      //final testDateTime = DateTime.now().add(Duration(minutes: 1));
+      
       final alarmSettings = AlarmSettings(
         id: alarmId,
         dateTime: dateTime,
@@ -109,18 +138,29 @@ class MedicineAlarmService {
         warningNotificationOnKill: true,
       );
 
+
       final result = await Alarm.set(alarmSettings: alarmSettings);
 
       if (result) {
         debugPrint(
-          '✅ Medicine alarm set: ${medicine.name} at ${_formatTime(medicine.times[timeIndex])} '
+          '🎯 Alarm SET SUCCESSFULLY: ${medicine.name} at ${_formatTime(medicine.times[timeIndex])} '
           '(ID: $alarmId, Time: $dateTime)',
         );
+        
+        // Verify the alarm was set
+        final alarms = await Alarm.getAlarms();
+        debugPrint('📋 Currently set alarms: ${alarms.length}');
+        for (final alarm in alarms) {
+          debugPrint('   - Alarm ID: ${alarm.id}, Time: ${alarm.dateTime}');
+        }
+      } else {
+        debugPrint('❌ Alarm.set() returned false');
       }
 
       return result;
-    } catch (e) {
+    } catch (e, stack) {
       debugPrint('❌ Error setting single alarm: $e');
+      debugPrint('Stack trace: $stack');
       return false;
     }
   }
@@ -128,8 +168,8 @@ class MedicineAlarmService {
   /// Cancel all alarms for a medicine
   Future<void> cancelMedicineAlarms(int medicineId) async {
     try {
-      // Cancel alarms for all time slots (0-3)
-      for (int i = 0; i < 4; i++) {
+      // Cancel alarms for all possible time slots
+      for (int i = 0; i < 10; i++) {
         final alarmId = _generateAlarmId(medicineId, i);
         await Alarm.stop(alarmId);
       }
@@ -139,7 +179,7 @@ class MedicineAlarmService {
     }
   }
 
-  /// Cancel all medicine alarms (when app starts or resets)
+  /// Cancel all medicine alarms
   Future<void> cancelAllMedicineAlarms() async {
     try {
       final medicines = await _dbHelper.getMedicines();
@@ -157,22 +197,32 @@ class MedicineAlarmService {
   /// Setup alarm listeners for medicine reminders
   void initializeMedicineAlarmListeners() {
     // Listen for ringing alarms
-    Alarm.ringing.listen((alarmSet) {
-      for (final alarm in alarmSet.alarms) {
-        _onMedicineAlarmRinging(alarm.id);
+    Alarm.ringing.listen((alarmId) {
+      debugPrint('🔔🔔🔔 ALARM RINGING: $alarmId');
+      _onMedicineAlarmRinging(alarmId as int);
+    });
+
+    // Listen for alarm stop events
+Alarm.ringing.listen((alarmSet) {
+      if (alarmSet.alarms.isEmpty) {
+        debugPrint('⏹️ All alarms stopped');
+      } else {
+        for (final alarm in alarmSet.alarms) {
+          debugPrint('🔔 Alarm ringing: ${alarm.id}');
+        }
       }
     });
+
+
+    debugPrint('✅ Alarm listeners initialized');
   }
 
   /// Handle when medicine alarm rings
   void _onMedicineAlarmRinging(int alarmId) {
     debugPrint('🔔 Medicine alarm ringing: $alarmId');
-
-    // You can add additional logic here like:
-    // - Show custom notification
-    // - Update UI
-    // - Play custom sound
-    // - etc.
+    
+    // You can show notification or update UI here
+    // For now, just log the event
   }
 
   String _formatTime(TimeOfDay time) {
@@ -180,5 +230,18 @@ class MedicineAlarmService {
     final minute = time.minute.toString().padLeft(2, '0');
     final period = time.period == DayPeriod.am ? 'AM' : 'PM';
     return '$hour:$minute $period';
+  }
+
+  /// Debug method to check all set alarms
+  Future<void> debugAlarms() async {
+    try {
+      final alarms = await Alarm.getAlarms();
+      debugPrint('🔍 DEBUG - Currently set alarms: ${alarms.length}');
+      for (final alarm in alarms) {
+        debugPrint('   - Alarm ID: ${alarm.id}, Time: ${alarm.dateTime}');
+      }
+    } catch (e) {
+      debugPrint('❌ Error debugging alarms: $e');
+    }
   }
 }

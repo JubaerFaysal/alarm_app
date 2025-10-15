@@ -25,11 +25,21 @@ class _MyAppState extends State<MyApp> {
   }
 
   Future<void> _initializeAlarms() async {
-    // Initialize alarm listeners
-    _medicineAlarmService.initializeMedicineAlarmListeners();
+    try {
+      // Initialize alarm service first
+      await _medicineAlarmService.initialize();
 
-    // You might want to reset and reschedule all alarms on app start
-    await _rescheduleAllMedicineAlarms();
+      // Initialize alarm listeners
+      _medicineAlarmService.initializeMedicineAlarmListeners();
+
+      // Reschedule all alarms
+      await _rescheduleAllMedicineAlarms();
+
+      // Debug: Check what alarms are set
+      await _medicineAlarmService.debugAlarms();
+    } catch (e) {
+      debugPrint('❌ Error in alarm initialization: $e');
+    }
   }
 
   Future<void> _rescheduleAllMedicineAlarms() async {
@@ -37,8 +47,12 @@ class _MyAppState extends State<MyApp> {
       final dbHelper = DatabaseHelper();
       final medicines = await dbHelper.getMedicines();
 
+      debugPrint('🔄 Rescheduling alarms for ${medicines.length} medicines');
+
       for (final medicine in medicines) {
-        if (medicine.isActive && medicine.id != null) {
+        if (medicine.isActive &&
+            medicine.id != null &&
+            medicine.isWithinDateRange) {
           await _medicineAlarmService.setMedicineAlarms(medicine);
         }
       }
