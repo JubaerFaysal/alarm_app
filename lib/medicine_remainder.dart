@@ -21,82 +21,82 @@ class MedicineListScreenState extends State<MedicineListScreen> {
   void initState() {
     super.initState();
     _fetchMedicines();
-    _debugDatabase();
+   // _debugDatabase();
   }
 
   // Add this method to MedicineListScreenState
-  void _debugDatabase() async {
-    try {
-      final dbHelper = DatabaseHelper();
-      final medicines = await dbHelper.getMedicines();
+//   void _debugDatabase() async {
+//     try {
+//       final dbHelper = DatabaseHelper();
+//       final medicines = await dbHelper.getMedicines();
 
-      debugPrint('🔍 DATABASE DEBUG: Found ${medicines.length} medicines');
+//       debugPrint('🔍 DATABASE DEBUG: Found ${medicines.length} medicines');
 
-      for (final medicine in medicines) {
-        debugPrint('''
-💊 Medicine: ${medicine.name}
-   ID: ${medicine.id}
-   Active: ${medicine.isActive}
-   Taken: ${medicine.isTaken}
-   Created: ${medicine.createdAt}
-   End Date: ${medicine.endDate}
-   Is Today: ${medicine.isToday}
-   Within Date Range: ${medicine.isWithinDateRange}
-   Days Remaining: ${medicine.daysRemaining}
-      ''');
-      }
-    } catch (e) {
-      debugPrint('❌ Error debugging database: $e');
-    }
-  }
+//       for (final medicine in medicines) {
+//         debugPrint('''
+// 💊 Medicine: ${medicine.name}
+//    ID: ${medicine.id}
+//    Active: ${medicine.isActive}
+//    Taken: ${medicine.isTaken}
+//    Created: ${medicine.createdAt}
+//    End Date: ${medicine.endDate}
+//    Is Today: ${medicine.isToday}
+//    Within Date Range: ${medicine.isWithinDateRange}
+//    Days Remaining: ${medicine.daysRemaining}
+//       ''');
+//       }
+//     } catch (e) {
+//       debugPrint('❌ Error debugging database: $e');
+//     }
+//   }
 
-  // Add this method to MedicineListScreenState
-  void _fixCorruptedDatabase() async {
-    try {
-      final dbHelper = DatabaseHelper();
-      final alarmService = MedicineAlarmService();
+  // // Add this method to MedicineListScreenState
+  // void _fixCorruptedDatabase() async {
+  //   try {
+  //     final dbHelper = DatabaseHelper();
+  //     final alarmService = MedicineAlarmService();
 
-      // Cancel all alarms first
-      await alarmService.cancelAllMedicineAlarms();
+  //     // Cancel all alarms first
+  //     await alarmService.cancelAllMedicineAlarms();
 
-      // Get all medicines
-      final medicines = await dbHelper.getMedicines();
+  //     // Get all medicines
+  //     final medicines = await dbHelper.getMedicines();
 
-      debugPrint('🔄 Fixing ${medicines.length} medicines...');
+  //     debugPrint('🔄 Fixing ${medicines.length} medicines...');
 
-      // Re-save each medicine to fix the corrupted times field
-      for (final medicine in medicines) {
-        if (medicine.id != null) {
-          // This will re-save with proper JSON format
-          await dbHelper.updateMedicine(medicine);
-          debugPrint('✅ Fixed medicine: ${medicine.name}');
-        }
-      }
+  //     // Re-save each medicine to fix the corrupted times field
+  //     for (final medicine in medicines) {
+  //       if (medicine.id != null) {
+  //         // This will re-save with proper JSON format
+  //         await dbHelper.updateMedicine(medicine);
+  //         debugPrint('✅ Fixed medicine: ${medicine.name}');
+  //       }
+  //     }
 
-      // Clear and reschedule alarms
-      await alarmService.cancelAllMedicineAlarms();
+  //     // Clear and reschedule alarms
+  //     await alarmService.cancelAllMedicineAlarms();
 
-      // Reschedule alarms for active medicines
-      for (final medicine in medicines) {
-        if (medicine.isActive &&
-            medicine.id != null &&
-            medicine.isWithinDateRange) {
-          await alarmService.setMedicineAlarms(medicine);
-        }
-      }
+  //     // Reschedule alarms for active medicines
+  //     for (final medicine in medicines) {
+  //       if (medicine.isActive &&
+  //           medicine.id != null &&
+  //           medicine.isWithinDateRange) {
+  //         await alarmService.setMedicineAlarms(medicine);
+  //       }
+  //     }
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Database fixed successfully!')));
+  //     ScaffoldMessenger.of(
+  //       context,
+  //     ).showSnackBar(SnackBar(content: Text('Database fixed successfully!')));
 
-      _fetchMedicines();
-    } catch (e) {
-      debugPrint('❌ Error fixing database: $e');
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error fixing database: $e')));
-    }
-  }
+  //     _fetchMedicines();
+  //   } catch (e) {
+  //     debugPrint('❌ Error fixing database: $e');
+  //     ScaffoldMessenger.of(
+  //       context,
+  //     ).showSnackBar(SnackBar(content: Text('Error fixing database: $e')));
+  //   }
+  // }
 
   // Add this button temporarily to your UI
   // Put it in your floatingActionButton or as a temporary button
@@ -753,42 +753,48 @@ class MedicineListScreenState extends State<MedicineListScreen> {
         ],
       ),
      // In your MedicineListScreen build method, add this temporarily:
-      floatingActionButton: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          // Temporary fix button
-          FloatingActionButton(
-            onPressed: _fixCorruptedDatabase,
-            backgroundColor: Colors.orange,
-            mini: true,
-            child: Icon(Icons.build),
-            heroTag: 'fix_database',
-          ),
-          SizedBox(height: 10),
-          // Emergency stop alarms
-          FloatingActionButton(
-            onPressed: () async {
-              final alarmService = MedicineAlarmService();
-              await alarmService.cancelAllMedicineAlarms();
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(SnackBar(content: Text('All alarms cancelled')));
-            },
-            backgroundColor: Colors.red,
-            mini: true,
-            child: Icon(Icons.alarm_off),
-            heroTag: 'stop_alarms',
-          ),
-          SizedBox(height: 10),
-          // Add medicine button
-          FloatingActionButton(
-            onPressed: _navigateToAddMedicine,
-            backgroundColor: Color(0xFF667EEA),
-            child: Icon(Icons.add),
-            heroTag: 'add_medicine',
-          ),
-        ],
+      floatingActionButton:  FloatingActionButton(
+        onPressed: _navigateToAddMedicine,
+        backgroundColor: Color(0xFF667EEA),
+        heroTag: 'add_medicine',
+        child: Icon(Icons.add),
       ),
+      // Column(
+      //   mainAxisAlignment: MainAxisAlignment.end,
+      //   children: [
+      //     // Temporary fix button
+      //     FloatingActionButton(
+      //       onPressed: _fixCorruptedDatabase,
+      //       backgroundColor: Colors.orange,
+      //       mini: true,
+      //       child: Icon(Icons.build),
+      //       heroTag: 'fix_database',
+      //     ),
+      //     SizedBox(height: 10),
+      //     // Emergency stop alarms
+      //     FloatingActionButton(
+      //       onPressed: () async {
+      //         final alarmService = MedicineAlarmService();
+      //         await alarmService.cancelAllMedicineAlarms();
+      //         ScaffoldMessenger.of(
+      //           context,
+      //         ).showSnackBar(SnackBar(content: Text('All alarms cancelled')));
+      //       },
+      //       backgroundColor: Colors.red,
+      //       mini: true,
+      //       child: Icon(Icons.alarm_off),
+      //       heroTag: 'stop_alarms',
+      //     ),
+      //     SizedBox(height: 10),
+      //     // Add medicine button
+      //     FloatingActionButton(
+      //       onPressed: _navigateToAddMedicine,
+      //       backgroundColor: Color(0xFF667EEA),
+      //       heroTag: 'add_medicine',
+      //       child: Icon(Icons.add),
+      //     ),
+      //   ],
+      // ),
     );
   }
 }

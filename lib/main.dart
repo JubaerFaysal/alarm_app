@@ -28,20 +28,10 @@ class _MyAppState extends State<MyApp> {
   Future<void> _initializeApp() async {
     try {
       debugPrint('🚀 Initializing app...');
-
-      // Initialize alarm service first
       await _medicineAlarmService.initialize();
-
-      // Initialize alarm listeners
       _medicineAlarmService.initializeMedicineAlarmListeners();
-
-      // Clear any existing alarms that might be causing immediate ringing
       await _medicineAlarmService.cancelAllMedicineAlarms();
-
-      // Wait a bit before rescheduling
       await Future.delayed(Duration(seconds: 1));
-
-      // Reschedule all alarms from database
       await _rescheduleAllMedicineAlarms();
 
       setState(() {
@@ -97,8 +87,9 @@ class _MyAppState extends State<MyApp> {
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            CircularProgressIndicator(color: Colors.white),
+            CircularProgressIndicator(color: Colors.deepPurple),
             SizedBox(height: 20),
             Text(
               'Loading Medicine Reminder...',

@@ -20,6 +20,7 @@ class AddMedicineScreenState extends State<AddMedicineScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _dosageController = TextEditingController();
   final TextEditingController _instructionsController = TextEditingController();
+  final TextEditingController _customFrequencyController =TextEditingController();
 
   String _selectedFrequency = 'Once Daily';
   String _selectedType = 'Tablet';
@@ -48,7 +49,7 @@ class AddMedicineScreenState extends State<AddMedicineScreen> {
   final List<String> _medicineTypes = [
     'Tablet',
     'Capsule',
-    'Liquid',
+    'Syrup',
     'Injection',
     'Cream',
     'Drops',
@@ -68,15 +69,23 @@ class AddMedicineScreenState extends State<AddMedicineScreen> {
     'Four Times Daily': 4,
     'As Needed': 1,
   };
-
+  bool _showCustomFrequencyInput = false;
+  int _customFrequencyCount = 1;
   @override
   void initState() {
     super.initState();
     _updateTimesBasedOnFrequency();
+    _customFrequencyController.text = '1';
   }
 
   void _updateTimesBasedOnFrequency() {
-    final requiredCount = _frequencyTimeCounts[_selectedFrequency]!;
+    int requiredCount;
+
+    if (_selectedFrequency == 'As Needed') {
+      requiredCount = _customFrequencyCount;
+    } else {
+      requiredCount = _frequencyTimeCounts[_selectedFrequency]!;
+    }
 
     if (_selectedTimes.length < requiredCount) {
       for (int i = _selectedTimes.length; i < requiredCount; i++) {
@@ -88,6 +97,148 @@ class AddMedicineScreenState extends State<AddMedicineScreen> {
 
     setState(() {});
   }
+
+    void _showFrequencyPicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(20),
+              topRight: Radius.circular(20),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'Select Frequency',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
+              ..._frequencies.map((frequency) {
+                String subtitle;
+                if (frequency == 'As Needed') {
+                  subtitle = 'Set custom times per day';
+                } else {
+                  subtitle = '${_frequencyTimeCounts[frequency]} times per day';
+                }
+
+                return ListTile(
+                  title: Text(frequency),
+                  subtitle: Text(subtitle),
+                  trailing: _selectedFrequency == frequency
+                      ? Icon(Icons.check, color: Color(0xFF667EEA))
+                      : null,
+                  onTap: () {
+                    setState(() {
+                      _selectedFrequency = frequency;
+                      if (frequency == 'As Needed') {
+                        _showCustomFrequencyInput = true;
+                        // Show dialog for custom frequency input
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          _showCustomFrequencyDialog();
+                        });
+                      } else {
+                        _showCustomFrequencyInput = false;
+                        _updateTimesBasedOnFrequency();
+                      }
+                    });
+                    Navigator.pop(context);
+                  },
+                );
+              }),
+              SizedBox(height: 20),
+            ],
+          ),
+        );
+      },
+    );
+  }
+    void _showCustomFrequencyDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Custom Frequency'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('How many times per day do you need this medicine? (1-12 times)'),
+              SizedBox(height: 20),
+              TextFormField(
+                controller: _customFrequencyController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: 'Times per day',
+                  border: OutlineInputBorder(),
+                  hintText: 'Enter number (1-12)',
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter a number';
+                  }
+                  final count = int.tryParse(value);
+                  if (count == null || count < 1 || count > 12) {
+                    return 'Please enter a number between 1 and 12';
+                  }
+                  return null;
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                // Revert to previous frequency if cancelled
+                setState(() {
+                  _selectedFrequency = 'Once Daily';
+                  _showCustomFrequencyInput = false;
+                  _updateTimesBasedOnFrequency();
+                });
+              },
+              child: Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final count = int.tryParse(_customFrequencyController.text);
+                if (count != null && count >= 1 && count <= 12) {
+                  setState(() {
+                    _customFrequencyCount = count;
+                    _updateTimesBasedOnFrequency();
+                  });
+                  Navigator.pop(context);
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Please enter a valid number between 1 and 12',
+                      ),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
+              child: Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+    // Update the frequency display text
+  // String get _frequencyDisplayText {
+  //   if (_selectedFrequency == 'As Needed') {
+  //     return 'As Needed ($_customFrequencyCount times)';
+  //   }
+  //   return _selectedFrequency;
+  // }
 
   Future<void> _selectTime(int index) async {
     final TimeOfDay? picked = await showTimePicker(
@@ -394,54 +545,54 @@ class AddMedicineScreenState extends State<AddMedicineScreen> {
     );
   }
 
-  void _showFrequencyPicker() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(20),
-              topRight: Radius.circular(20),
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: EdgeInsets.all(16),
-                child: Text(
-                  'Select Frequency',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-              ),
-              ..._frequencies.map((frequency) {
-                return ListTile(
-                  title: Text(frequency),
-                  subtitle: Text(
-                    '${_frequencyTimeCounts[frequency]} times per day',
-                  ),
-                  trailing: _selectedFrequency == frequency
-                      ? Icon(Icons.check, color: Color(0xFF667EEA))
-                      : null,
-                  onTap: () {
-                    setState(() {
-                      _selectedFrequency = frequency;
-                      _updateTimesBasedOnFrequency();
-                    });
-                    Navigator.pop(context);
-                  },
-                );
-              }),
-              SizedBox(height: 20),
-            ],
-          ),
-        );
-      },
-    );
-  }
+  // void _showFrequencyPicker() {
+  //   showModalBottomSheet(
+  //     context: context,
+  //     backgroundColor: Colors.transparent,
+  //     builder: (context) {
+  //       return Container(
+  //         decoration: BoxDecoration(
+  //           color: Colors.white,
+  //           borderRadius: BorderRadius.only(
+  //             topLeft: Radius.circular(20),
+  //             topRight: Radius.circular(20),
+  //           ),
+  //         ),
+  //         child: Column(
+  //           mainAxisSize: MainAxisSize.min,
+  //           children: [
+  //             Padding(
+  //               padding: EdgeInsets.all(16),
+  //               child: Text(
+  //                 'Select Frequency',
+  //                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+  //               ),
+  //             ),
+  //             ..._frequencies.map((frequency) {
+  //               return ListTile(
+  //                 title: Text(frequency),
+  //                 subtitle: Text(
+  //                   '${_frequencyTimeCounts[frequency]} times per day',
+  //                 ),
+  //                 trailing: _selectedFrequency == frequency
+  //                     ? Icon(Icons.check, color: Color(0xFF667EEA))
+  //                     : null,
+  //                 onTap: () {
+  //                   setState(() {
+  //                     _selectedFrequency = frequency;
+  //                     _updateTimesBasedOnFrequency();
+  //                   });
+  //                   Navigator.pop(context);
+  //                 },
+  //               );
+  //             }),
+  //             SizedBox(height: 20),
+  //           ],
+  //         ),
+  //       );
+  //     },
+  //   );
+  // }
 
   void _showTypePicker() {
     showModalBottomSheet(
@@ -576,7 +727,7 @@ class AddMedicineScreenState extends State<AddMedicineScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Times ($_selectedFrequency)',
+          'Times (${_selectedFrequency == 'As Needed' ? '$_customFrequencyCount times' : _selectedFrequency})',
           style: TextStyle(
             fontWeight: FontWeight.w600,
             color: Colors.grey[700],
@@ -584,6 +735,33 @@ class AddMedicineScreenState extends State<AddMedicineScreen> {
           ),
         ),
         SizedBox(height: 8),
+        if (_selectedFrequency == 'As Needed') ...[
+          Container(
+            padding: EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.blue[50],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.blue[100]!),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info, color: Colors.blue[600], size: 16),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Custom frequency: $_customFrequencyCount times per day',
+                    style: TextStyle(color: Colors.blue[800], fontSize: 12),
+                  ),
+                ),
+                TextButton(
+                  onPressed: _showCustomFrequencyDialog,
+                  child: Text('Change', style: TextStyle(fontSize: 12)),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(height: 12),
+        ],
         ..._selectedTimes.asMap().entries.map((entry) {
           final index = entry.key;
           final time = entry.value;
@@ -608,8 +786,7 @@ class AddMedicineScreenState extends State<AddMedicineScreen> {
                       style: TextStyle(color: Colors.grey[700], fontSize: 16),
                     ),
                     Spacer(),
-                    if (_selectedFrequency != 'As Needed')
-                      Icon(Icons.edit, color: Colors.grey[500], size: 18),
+                    Icon(Icons.edit, color: Colors.grey[500], size: 18),
                   ],
                 ),
               ),
@@ -830,6 +1007,8 @@ class AddMedicineScreenState extends State<AddMedicineScreen> {
     _nameController.dispose();
     _dosageController.dispose();
     _instructionsController.dispose();
+  _customFrequencyController.dispose();
+
     super.dispose();
   }
 }
