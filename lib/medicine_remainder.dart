@@ -727,7 +727,7 @@ class MedicineListScreenState extends State<MedicineListScreen> {
                         ),
                         child: Center(
                           child: Text(
-                            'Upcoming (${_upcomingMedicines.length})',
+                            'Inactive (${_upcomingMedicines.length})',
                             style: TextStyle(
                               fontWeight: FontWeight.w600,
                               color: _currentIndex == 1

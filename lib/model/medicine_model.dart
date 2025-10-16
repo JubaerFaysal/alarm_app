@@ -3,7 +3,8 @@ import 'dart:convert';
 
 class Medicine {
   final int? id;
-  final String name;
+  final String name; // Display name (first medicine or combined)
+  final List<String> medicineNames; // List of all medicine names
   final String dosage;
   final String type;
   final List<TimeOfDay> times;
@@ -20,6 +21,7 @@ class Medicine {
   Medicine({
     this.id,
     required this.name,
+    required this.medicineNames, // Add this
     required this.dosage,
     required this.type,
     required this.times,
@@ -38,6 +40,7 @@ class Medicine {
     return {
       'id': id,
       'name': name,
+      'medicineNames': jsonEncode(medicineNames), // Store as JSON array
       'dosage': dosage,
       'type': type,
       'times': jsonEncode(
@@ -57,6 +60,17 @@ class Medicine {
 
   factory Medicine.fromMap(Map<String, dynamic> map) {
     try {
+      List<String> medicineNamesList = [];
+      if (map['medicineNames'] != null) {
+        final namesJson = jsonDecode(map['medicineNames']);
+        if (namesJson is List) {
+          medicineNamesList = List<String>.from(namesJson);
+        }
+      } else {
+        // Fallback for old data - use single name
+        medicineNamesList = [map['name']];
+      }
+
       List<TimeOfDay> timesList = [];
 
       // Handle both JSON format and corrupted string format
@@ -97,6 +111,7 @@ class Medicine {
       return Medicine(
         id: map['id'],
         name: map['name'],
+        medicineNames: medicineNamesList,
         dosage: map['dosage'],
         type: map['type'],
         times: timesList,
@@ -113,11 +128,11 @@ class Medicine {
     } catch (e) {
       debugPrint('❌ Critical error parsing medicine: $e');
       debugPrint('Medicine data: $map');
-
-      // Return a default medicine to prevent app crash
+      // Return default medicine with empty names list
       return Medicine(
         id: map['id'],
         name: map['name'] ?? 'Unknown Medicine',
+        medicineNames: [map['name'] ?? 'Unknown Medicine'],
         dosage: map['dosage'] ?? '',
         type: map['type'] ?? 'Tablet',
         times: [TimeOfDay(hour: 8, minute: 0)],
@@ -137,6 +152,7 @@ class Medicine {
   Medicine copyWith({
     int? id,
     String? name,
+    List<String>? medicineNames,
     String? dosage,
     String? type,
     List<TimeOfDay>? times,
@@ -153,6 +169,7 @@ class Medicine {
     return Medicine(
       id: id ?? this.id,
       name: name ?? this.name,
+      medicineNames: medicineNames ?? this.medicineNames,
       dosage: dosage ?? this.dosage,
       type: type ?? this.type,
       times: times ?? this.times,

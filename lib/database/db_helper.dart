@@ -19,7 +19,7 @@ class DatabaseHelper {
     String path = join(await getDatabasesPath(), 'medicines.db');
     return await openDatabase(
       path,
-      version: 3, // Updated version
+      version: 4, // Incremented version number
       onCreate: _createDatabase,
       onUpgrade: _upgradeDatabase,
     );
@@ -30,6 +30,7 @@ class DatabaseHelper {
       CREATE TABLE medicines(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
+        medicineNames TEXT NOT NULL,
         dosage TEXT NOT NULL,
         type TEXT NOT NULL,
         times TEXT NOT NULL,
@@ -58,6 +59,26 @@ class DatabaseHelper {
       await db.execute(
         'ALTER TABLE medicines ADD COLUMN isTaken INTEGER NOT NULL DEFAULT 0',
       );
+    }
+    if (oldVersion < 4) {
+      // Add the missing name column and medicineNames column
+      await db.execute('ALTER TABLE medicines ADD COLUMN name TEXT');
+      await db.execute('ALTER TABLE medicines ADD COLUMN medicineNames TEXT');
+
+      // Migrate existing data: copy old data to new columns
+      final medicines = await db.query('medicines');
+      for (final medicine in medicines) {
+        // For existing records, set name to a default value and medicineNames as empty array
+        await db.update(
+          'medicines',
+          {
+            'name': 'Medicine', // Default name for existing records
+            'medicineNames': '[]', // Empty array for existing records
+          },
+          where: 'id = ?',
+          whereArgs: [medicine['id']],
+        );
+      }
     }
   }
 
@@ -152,6 +173,24 @@ class DatabaseHelper {
     } catch (e) {
       print('❌ Error getting active medicines: $e');
       rethrow;
+    }
+  }
+
+  // Add this method to reset database if needed
+  Future<void> resetDatabase() async {
+    try {
+      final db = await database;
+      await db.close();
+      _database = null;
+
+      String path = join(await getDatabasesPath(), 'medicines.db');
+      await deleteDatabase(path);
+
+      // Reinitialize database
+      _database = await _initDatabase();
+      print('✅ Database reset successfully');
+    } catch (e) {
+      print('❌ Error resetting database: $e');
     }
   }
 }

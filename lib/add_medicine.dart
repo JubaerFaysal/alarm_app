@@ -28,6 +28,7 @@ class AddMedicineScreenState extends State<AddMedicineScreen> {
   int _pillCount = 1;
   DateTime? _selectedEndDate;
 
+ final List<String> _medicineNames = [];
   List<TimeOfDay> _selectedTimes = [TimeOfDay(hour: 8, minute: 0)];
   final List<Color> _availableColors = [
     Color(0xFF4CAF50), // Green
@@ -71,6 +72,7 @@ class AddMedicineScreenState extends State<AddMedicineScreen> {
   };
   bool _showCustomFrequencyInput = false;
   int _customFrequencyCount = 1;
+
   @override
   void initState() {
     super.initState();
@@ -97,6 +99,39 @@ class AddMedicineScreenState extends State<AddMedicineScreen> {
 
     setState(() {});
   }
+
+    // Add medicine name to the list
+  void _addMedicineName() {
+    final name = _nameController.text.trim();
+    if (name.isNotEmpty && !_medicineNames.contains(name)) {
+      setState(() {
+        _medicineNames.add(name);
+        _nameController.clear();
+      });
+    } else if (_medicineNames.contains(name)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Medicine name already added'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+  }
+
+    // Remove medicine name from the list
+  void _removeMedicineName(String name) {
+    setState(() {
+      _medicineNames.remove(name);
+    });
+  }
+
+    // Clear all medicine names
+  void _clearAllMedicineNames() {
+    setState(() {
+      _medicineNames.clear();
+    });
+  }
+
 
     void _showFrequencyPicker() {
     showModalBottomSheet(
@@ -268,7 +303,7 @@ class AddMedicineScreenState extends State<AddMedicineScreen> {
   Future<void> _selectEndDate() async {
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: _selectedEndDate ?? DateTime.now().add(Duration(days: 30)),
+      initialDate: _selectedEndDate ?? DateTime.now(),
       firstDate: DateTime.now(),
       lastDate: DateTime(2100),
       builder: (BuildContext context, Widget? child) {
@@ -303,6 +338,16 @@ class AddMedicineScreenState extends State<AddMedicineScreen> {
       return;
     }
 
+    if (_medicineNames.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Please add at least one medicine name'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     if (_formKey.currentState!.validate()) {
       showDialog(
         context: context,
@@ -311,8 +356,18 @@ class AddMedicineScreenState extends State<AddMedicineScreen> {
       );
 
       try {
+        // Create a combined name for display (you can modify this logic)
+        String displayName;
+        if (_medicineNames.length == 1) {
+          displayName = _medicineNames.first;
+        } else {
+          displayName =
+              '${_medicineNames.first} + ${_medicineNames.length - 1} more';
+        }
+
         final newMedicine = Medicine(
-          name: _nameController.text.trim(),
+          name: displayName,
+          medicineNames: _medicineNames, // Store the list of names
           dosage: _dosageController.text.trim(),
           type: _selectedType,
           times: _selectedTimes,
@@ -373,6 +428,7 @@ class AddMedicineScreenState extends State<AddMedicineScreen> {
     }
   }
 
+
   String _formatTime(TimeOfDay time) {
     final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
     final minute = time.minute.toString().padLeft(2, '0');
@@ -382,6 +438,172 @@ class AddMedicineScreenState extends State<AddMedicineScreen> {
 
   String _formatDate(DateTime date) {
     return '${date.day}/${date.month}/${date.year}';
+  }
+
+    // Updated form field for medicine names
+  Widget _buildMedicineNamesField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Medicine Names *',
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            color: Colors.grey[700],
+            fontSize: 14,
+          ),
+        ),
+        SizedBox(height: 8),
+
+        // Input field for adding medicine names
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _nameController,
+                decoration: InputDecoration(
+                  hintText: 'Enter medicine name',
+                  prefixIcon: Icon(
+                    Icons.medical_services,
+                    color: Colors.grey[500],
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey[300]!),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Color(0xFF667EEA)),
+                  ),
+                  filled: true,
+                  fillColor: Colors.grey[50],
+                  suffixIcon: IconButton(
+                    icon: Icon(Icons.add, color: Color(0xFF667EEA)),
+                    onPressed: _addMedicineName,
+                  ),
+                ),
+                onFieldSubmitted: (value) => _addMedicineName(),
+                validator: (value) {
+                  if (_medicineNames.isEmpty) {
+                    return 'Please add at least one medicine name';
+                  }
+                  return null;
+                },
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: 8),
+
+        // Instructions
+        Text(
+          'Press Enter or + button to add medicine names',
+          style: TextStyle(color: Colors.grey[600], fontSize: 12),
+        ),
+        SizedBox(height: 12),
+
+        // Display added medicine names
+// Replace the entire medicine names display section with this:
+        if (_medicineNames.isNotEmpty) ...[
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    'Added Medicines (${_medicineNames.length})',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey[700],
+                      fontSize: 14,
+                    ),
+                  ),
+                  Spacer(),
+                  TextButton(
+                    onPressed: _clearAllMedicineNames,
+                    child: Text(
+                      'Clear All',
+                      style: TextStyle(color: Colors.red, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 8),
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey[300]!),
+                ),
+                padding: EdgeInsets.all(12),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _medicineNames.map((name) {
+                    return Chip(
+                      label: Text(
+                        name,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white,
+                        ),
+                      ),
+                      backgroundColor: Color(0xFF667EEA),
+                      deleteIcon: Icon(
+                        Icons.close,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                      deleteIconColor: Colors.white,
+                      onDeleted: () => _removeMedicineName(name),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      side: BorderSide.none,
+                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+          ),
+        ] else ...[
+          Container(
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey[300]!),
+            ),
+            child: Center(
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.medical_services_outlined,
+                    color: Colors.grey[400],
+                    size: 40,
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'No medicine names added yet',
+                    style: TextStyle(color: Colors.grey[500], fontSize: 14),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Add medicine names using the field above',
+                    style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+        SizedBox(height: 10),
+      ],
+    );
   }
 
   Widget _buildFormField(
@@ -868,12 +1090,7 @@ class AddMedicineScreenState extends State<AddMedicineScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildFormField(
-                'Medicine Name',
-                'Enter medicine name',
-                Icons.medical_services,
-                _nameController,
-              ),
+              _buildMedicineNamesField(),
               _buildFormField(
                 'Dosage',
                 'e.g., 500mg, 10ml',
@@ -1007,7 +1224,7 @@ class AddMedicineScreenState extends State<AddMedicineScreen> {
     _nameController.dispose();
     _dosageController.dispose();
     _instructionsController.dispose();
-  _customFrequencyController.dispose();
+    _customFrequencyController.dispose();
 
     super.dispose();
   }
