@@ -3,8 +3,8 @@ import 'package:alarm_test_final/database/db_helper.dart';
 import 'package:alarm_test_final/medicine_remainder.dart';
 import 'package:flutter/material.dart';
 
-
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
 
@@ -17,28 +17,43 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   final MedicineAlarmService _medicineAlarmService = MedicineAlarmService();
+  bool _isInitialized = false;
 
   @override
   void initState() {
     super.initState();
-    _initializeAlarms();
+    _initializeApp();
   }
 
-  Future<void> _initializeAlarms() async {
+  Future<void> _initializeApp() async {
     try {
+      debugPrint('🚀 Initializing app...');
+
       // Initialize alarm service first
       await _medicineAlarmService.initialize();
 
       // Initialize alarm listeners
       _medicineAlarmService.initializeMedicineAlarmListeners();
 
-      // Reschedule all alarms
+      // Clear any existing alarms that might be causing immediate ringing
+      await _medicineAlarmService.cancelAllMedicineAlarms();
+
+      // Wait a bit before rescheduling
+      await Future.delayed(Duration(seconds: 1));
+
+      // Reschedule all alarms from database
       await _rescheduleAllMedicineAlarms();
 
-      // Debug: Check what alarms are set
-      await _medicineAlarmService.debugAlarms();
+      setState(() {
+        _isInitialized = true;
+      });
+
+      debugPrint('✅ App initialization complete');
     } catch (e) {
-      debugPrint('❌ Error in alarm initialization: $e');
+      debugPrint('❌ Error in app initialization: $e');
+      setState(() {
+        _isInitialized = true; // Still show UI even if alarms fail
+      });
     }
   }
 
@@ -47,17 +62,20 @@ class _MyAppState extends State<MyApp> {
       final dbHelper = DatabaseHelper();
       final medicines = await dbHelper.getMedicines();
 
-      debugPrint('🔄 Rescheduling alarms for ${medicines.length} medicines');
+      debugPrint('🔄 Found ${medicines.length} medicines in database');
 
       for (final medicine in medicines) {
         if (medicine.isActive &&
             medicine.id != null &&
             medicine.isWithinDateRange) {
+          debugPrint('📋 Rescheduling alarms for: ${medicine.name}');
           await _medicineAlarmService.setMedicineAlarms(medicine);
+        } else {
+          debugPrint('⏸️ Skipping inactive/expired medicine: ${medicine.name}');
         }
       }
 
-      debugPrint('✅ Rescheduled alarms for ${medicines.length} medicines');
+      debugPrint('✅ Completed rescheduling alarms');
     } catch (e) {
       debugPrint('❌ Error rescheduling medicine alarms: $e');
     }
@@ -69,7 +87,26 @@ class _MyAppState extends State<MyApp> {
       debugShowCheckedModeBanner: false,
       title: 'Medicine Reminder',
       theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: true),
-      home: MedicineListScreen(),
+      home: _isInitialized ? MedicineListScreen() : _buildLoadingScreen(),
+    );
+  }
+
+  Widget _buildLoadingScreen() {
+    return Scaffold(
+      backgroundColor: Color(0xFF667EEA),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(color: Colors.white),
+            SizedBox(height: 20),
+            Text(
+              'Loading Medicine Reminder...',
+              style: TextStyle(color: Colors.white, fontSize: 16),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

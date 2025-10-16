@@ -1,9 +1,8 @@
+import 'package:alarm_test_final/Alarm/alarm_service.dart';
+import 'package:alarm_test_final/add_medicine.dart';
 import 'package:alarm_test_final/database/db_helper.dart';
 import 'package:alarm_test_final/model/medicine_model.dart';
 import 'package:flutter/material.dart';
-import 'dart:developer' as developer;
-import 'Alarm/alarm_service.dart';
-import 'add_medicine.dart';
 
 class MedicineListScreen extends StatefulWidget {
   const MedicineListScreen({super.key});
@@ -22,7 +21,86 @@ class MedicineListScreenState extends State<MedicineListScreen> {
   void initState() {
     super.initState();
     _fetchMedicines();
+    _debugDatabase();
   }
+
+  // Add this method to MedicineListScreenState
+  void _debugDatabase() async {
+    try {
+      final dbHelper = DatabaseHelper();
+      final medicines = await dbHelper.getMedicines();
+
+      debugPrint('🔍 DATABASE DEBUG: Found ${medicines.length} medicines');
+
+      for (final medicine in medicines) {
+        debugPrint('''
+💊 Medicine: ${medicine.name}
+   ID: ${medicine.id}
+   Active: ${medicine.isActive}
+   Taken: ${medicine.isTaken}
+   Created: ${medicine.createdAt}
+   End Date: ${medicine.endDate}
+   Is Today: ${medicine.isToday}
+   Within Date Range: ${medicine.isWithinDateRange}
+   Days Remaining: ${medicine.daysRemaining}
+      ''');
+      }
+    } catch (e) {
+      debugPrint('❌ Error debugging database: $e');
+    }
+  }
+
+  // Add this method to MedicineListScreenState
+  void _fixCorruptedDatabase() async {
+    try {
+      final dbHelper = DatabaseHelper();
+      final alarmService = MedicineAlarmService();
+
+      // Cancel all alarms first
+      await alarmService.cancelAllMedicineAlarms();
+
+      // Get all medicines
+      final medicines = await dbHelper.getMedicines();
+
+      debugPrint('🔄 Fixing ${medicines.length} medicines...');
+
+      // Re-save each medicine to fix the corrupted times field
+      for (final medicine in medicines) {
+        if (medicine.id != null) {
+          // This will re-save with proper JSON format
+          await dbHelper.updateMedicine(medicine);
+          debugPrint('✅ Fixed medicine: ${medicine.name}');
+        }
+      }
+
+      // Clear and reschedule alarms
+      await alarmService.cancelAllMedicineAlarms();
+
+      // Reschedule alarms for active medicines
+      for (final medicine in medicines) {
+        if (medicine.isActive &&
+            medicine.id != null &&
+            medicine.isWithinDateRange) {
+          await alarmService.setMedicineAlarms(medicine);
+        }
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Database fixed successfully!')));
+
+      _fetchMedicines();
+    } catch (e) {
+      debugPrint('❌ Error fixing database: $e');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error fixing database: $e')));
+    }
+  }
+
+  // Add this button temporarily to your UI
+  // Put it in your floatingActionButton or as a temporary button
+
 
   Future<void> _fetchMedicines() async {
     try {
@@ -31,13 +109,15 @@ class MedicineListScreenState extends State<MedicineListScreen> {
 
       setState(() {
         _medicines = allMeds;
-        _todayMedicines =
-            allMeds.where((m) => m.isActive && m.isWithinDateRange).toList();
-        _upcomingMedicines =
-            allMeds.where((m) => !m.isActive || !m.isWithinDateRange).toList();
+        _todayMedicines = allMeds
+            .where((m) => m.isActive && m.isToday)
+            .toList();
+        _upcomingMedicines = allMeds
+            .where((m) => !m.isActive || !m.isToday)
+            .toList();
       });
     } catch (e) {
-      developer.log("Error fetching medicines: $e");
+      debugPrint("Error fetching medicines: $e");
     }
   }
 
@@ -45,12 +125,11 @@ class MedicineListScreenState extends State<MedicineListScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder:
-            (context) => AddMedicineScreen(
-              onMedicineAdded: () {
-                _fetchMedicines();
-              },
-            ),
+        builder: (context) => AddMedicineScreen(
+          onMedicineAdded: () {
+            _fetchMedicines();
+          },
+        ),
       ),
     );
   }
@@ -68,13 +147,25 @@ class MedicineListScreenState extends State<MedicineListScreen> {
     }
   }
 
-  void _markAsTaken(Medicine medicine) {
+  void _markAsTaken(Medicine medicine) async {
+    final dbHelper = DatabaseHelper();
+    await dbHelper.markMedicineAsTaken(medicine.id!, true);
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('${medicine.name} marked as taken!'),
         backgroundColor: Colors.green,
       ),
     );
+
+    _fetchMedicines();
+  }
+
+  void _markAsNotTaken(Medicine medicine) async {
+    final dbHelper = DatabaseHelper();
+    await dbHelper.markMedicineAsTaken(medicine.id!, false);
+
+    _fetchMedicines();
   }
 
   void _toggleMedicineStatus(Medicine medicine) async {
@@ -86,7 +177,9 @@ class MedicineListScreenState extends State<MedicineListScreen> {
     // Update alarms based on new status
     final alarmService = MedicineAlarmService();
     if (newStatus) {
-      await alarmService.setMedicineAlarms(medicine.copyWith(isActive: true));
+      await alarmService.setMedicineAlarms(
+        medicine.copyWith(isActive: true, id: medicine.id!),
+      );
     } else {
       await alarmService.cancelMedicineAlarms(medicine.id!);
     }
@@ -95,8 +188,7 @@ class MedicineListScreenState extends State<MedicineListScreen> {
   }
 
   int get _takenCount {
-    // You can implement actual taken count logic here
-    return 1;
+    return _todayMedicines.where((m) => m.isTaken).length;
   }
 
   int get _totalCount {
@@ -228,7 +320,6 @@ class MedicineListScreenState extends State<MedicineListScreen> {
       ),
       child: Row(
         children: [
-          // Pill Icon with Color
           Container(
             width: 50,
             height: 50,
@@ -239,8 +330,6 @@ class MedicineListScreenState extends State<MedicineListScreen> {
             child: Icon(Icons.medication, color: medicine.color, size: 28),
           ),
           SizedBox(width: 16),
-
-          // Medicine Details
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -343,7 +432,7 @@ class MedicineListScreenState extends State<MedicineListScreen> {
                     SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        allTimes,
+                        '${medicine.times.length} time(s): $allTimes',
                         style: TextStyle(color: Colors.grey[600], fontSize: 12),
                       ),
                     ),
@@ -360,7 +449,7 @@ class MedicineListScreenState extends State<MedicineListScreen> {
                     SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        'Ends: ${_formatDate(medicine.endDate)} ${medicine.daysRemaining != null ? '(${medicine.daysRemaining} days left)' : ''}',
+                        'Ends: ${_formatDate(medicine.endDate)} (${medicine.daysRemaining} days left)',
                         style: TextStyle(
                           color: Colors.orange[600],
                           fontSize: 12,
@@ -393,22 +482,32 @@ class MedicineListScreenState extends State<MedicineListScreen> {
               ],
             ),
           ),
-
-          // Action Button
           if (isToday)
             Column(
               children: [
                 GestureDetector(
-                  onTap: () => _markAsTaken(medicine),
+                  onTap: () => medicine.isTaken
+                      ? _markAsNotTaken(medicine)
+                      : _markAsTaken(medicine),
                   child: Container(
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: Colors.green.withOpacity(0.1),
+                      color: medicine.isTaken
+                          ? Colors.green.withOpacity(0.3)
+                          : Colors.green.withOpacity(0.1),
                       shape: BoxShape.circle,
-                      border: Border.all(color: Colors.green),
+                      border: Border.all(
+                        color: medicine.isTaken
+                            ? Colors.green
+                            : Colors.grey[300]!,
+                      ),
                     ),
-                    child: Icon(Icons.check, color: Colors.green, size: 20),
+                    child: Icon(
+                      medicine.isTaken ? Icons.check_circle : Icons.check,
+                      color: medicine.isTaken ? Colors.green : Colors.grey[500],
+                      size: 20,
+                    ),
                   ),
                 ),
                 SizedBox(height: 8),
@@ -448,25 +547,34 @@ class MedicineListScreenState extends State<MedicineListScreen> {
     );
   }
 
+  String _formatTime(TimeOfDay time) {
+    final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+    final minute = time.minute.toString().padLeft(2, '0');
+    final period = time.period == DayPeriod.am ? 'AM' : 'PM';
+    return '$hour:$minute $period';
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.day}/${date.month}/${date.year}';
+  }
+
   Widget _buildTabContent() {
     if (_currentIndex == 0) {
       return _todayMedicines.isEmpty
           ? _buildEmptyState()
           : ListView(
-            children:
-                _todayMedicines.map((medicine) {
-                  return _buildMedicineCard(medicine, true);
-                }).toList(),
-          );
+              children: _todayMedicines.map((medicine) {
+                return _buildMedicineCard(medicine, true);
+              }).toList(),
+            );
     } else {
       return _upcomingMedicines.isEmpty
           ? _buildEmptyUpcomingState()
           : ListView(
-            children:
-                _upcomingMedicines.map((medicine) {
-                  return _buildMedicineCard(medicine, false);
-                }).toList(),
-          );
+              children: _upcomingMedicines.map((medicine) {
+                return _buildMedicineCard(medicine, false);
+              }).toList(),
+            );
     }
   }
 
@@ -538,17 +646,6 @@ class MedicineListScreenState extends State<MedicineListScreen> {
     );
   }
 
-  String _formatTime(TimeOfDay time) {
-    final hour = time.hourOfPeriod;
-    final minute = time.minute.toString().padLeft(2, '0');
-    final period = time.period == DayPeriod.am ? 'AM' : 'PM';
-    return '$hour:$minute $period';
-  }
-
-  String _formatDate(DateTime date) {
-    return '${date.day}/${date.month}/${date.year}';
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -556,8 +653,6 @@ class MedicineListScreenState extends State<MedicineListScreen> {
         children: [
           _buildHeader(),
           SizedBox(height: 20),
-
-          // Tab Bar
           Padding(
             padding: EdgeInsets.symmetric(horizontal: 24),
             child: Container(
@@ -578,31 +673,28 @@ class MedicineListScreenState extends State<MedicineListScreen> {
                       child: Container(
                         padding: EdgeInsets.symmetric(vertical: 12),
                         decoration: BoxDecoration(
-                          color:
-                              _currentIndex == 0
-                                  ? Colors.white
-                                  : Colors.transparent,
+                          color: _currentIndex == 0
+                              ? Colors.white
+                              : Colors.transparent,
                           borderRadius: BorderRadius.circular(8),
-                          boxShadow:
-                              _currentIndex == 0
-                                  ? [
-                                    BoxShadow(
-                                      color: Colors.black12,
-                                      blurRadius: 4,
-                                      offset: Offset(0, 2),
-                                    ),
-                                  ]
-                                  : null,
+                          boxShadow: _currentIndex == 0
+                              ? [
+                                  BoxShadow(
+                                    color: Colors.black12,
+                                    blurRadius: 4,
+                                    offset: Offset(0, 2),
+                                  ),
+                                ]
+                              : null,
                         ),
                         child: Center(
                           child: Text(
                             'Today (${_todayMedicines.length})',
                             style: TextStyle(
                               fontWeight: FontWeight.w600,
-                              color:
-                                  _currentIndex == 0
-                                      ? Color(0xFF667EEA)
-                                      : Colors.grey,
+                              color: _currentIndex == 0
+                                  ? Color(0xFF667EEA)
+                                  : Colors.grey,
                             ),
                           ),
                         ),
@@ -619,31 +711,28 @@ class MedicineListScreenState extends State<MedicineListScreen> {
                       child: Container(
                         padding: EdgeInsets.symmetric(vertical: 12),
                         decoration: BoxDecoration(
-                          color:
-                              _currentIndex == 1
-                                  ? Colors.white
-                                  : Colors.transparent,
+                          color: _currentIndex == 1
+                              ? Colors.white
+                              : Colors.transparent,
                           borderRadius: BorderRadius.circular(8),
-                          boxShadow:
-                              _currentIndex == 1
-                                  ? [
-                                    BoxShadow(
-                                      color: Colors.black12,
-                                      blurRadius: 4,
-                                      offset: Offset(0, 2),
-                                    ),
-                                  ]
-                                  : null,
+                          boxShadow: _currentIndex == 1
+                              ? [
+                                  BoxShadow(
+                                    color: Colors.black12,
+                                    blurRadius: 4,
+                                    offset: Offset(0, 2),
+                                  ),
+                                ]
+                              : null,
                         ),
                         child: Center(
                           child: Text(
                             'Upcoming (${_upcomingMedicines.length})',
                             style: TextStyle(
                               fontWeight: FontWeight.w600,
-                              color:
-                                  _currentIndex == 1
-                                      ? Color(0xFF667EEA)
-                                      : Colors.grey,
+                              color: _currentIndex == 1
+                                  ? Color(0xFF667EEA)
+                                  : Colors.grey,
                             ),
                           ),
                         ),
@@ -654,10 +743,7 @@ class MedicineListScreenState extends State<MedicineListScreen> {
               ),
             ),
           ),
-
           SizedBox(height: 20),
-
-          // Medicine List
           Expanded(
             child: Padding(
               padding: EdgeInsets.symmetric(horizontal: 24),
@@ -666,55 +752,42 @@ class MedicineListScreenState extends State<MedicineListScreen> {
           ),
         ],
       ),
-
-      // Floating Action Button
-      floatingActionButton: FloatingActionButton(
-        onPressed: _navigateToAddMedicine,
-        backgroundColor: Color(0xFF667EEA),
-        foregroundColor: Colors.white,
-        elevation: 4,
-        child: Icon(Icons.add, size: 28),
-      ),
-
-      // Bottom Navigation Bar
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black12,
-              blurRadius: 8,
-              offset: Offset(0, -2),
-            ),
-          ],
-        ),
-        child: BottomNavigationBar(
-          currentIndex: 0,
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: Colors.white,
-          selectedItemColor: Color(0xFF667EEA),
-          unselectedItemColor: Colors.grey,
-          items: [
-            BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.calendar_today_outlined),
-              activeIcon: Icon(Icons.calendar_today),
-              label: 'Calendar',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.analytics_outlined),
-              activeIcon: Icon(Icons.analytics),
-              label: 'Reports',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.settings_outlined),
-              activeIcon: Icon(Icons.settings),
-              label: 'Settings',
-            ),
-          ],
-          onTap: (index) {
-            // Navigation logic can be added here
-          },
-        ),
+     // In your MedicineListScreen build method, add this temporarily:
+      floatingActionButton: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          // Temporary fix button
+          FloatingActionButton(
+            onPressed: _fixCorruptedDatabase,
+            backgroundColor: Colors.orange,
+            mini: true,
+            child: Icon(Icons.build),
+            heroTag: 'fix_database',
+          ),
+          SizedBox(height: 10),
+          // Emergency stop alarms
+          FloatingActionButton(
+            onPressed: () async {
+              final alarmService = MedicineAlarmService();
+              await alarmService.cancelAllMedicineAlarms();
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text('All alarms cancelled')));
+            },
+            backgroundColor: Colors.red,
+            mini: true,
+            child: Icon(Icons.alarm_off),
+            heroTag: 'stop_alarms',
+          ),
+          SizedBox(height: 10),
+          // Add medicine button
+          FloatingActionButton(
+            onPressed: _navigateToAddMedicine,
+            backgroundColor: Color(0xFF667EEA),
+            child: Icon(Icons.add),
+            heroTag: 'add_medicine',
+          ),
+        ],
       ),
     );
   }

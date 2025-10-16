@@ -1,3 +1,5 @@
+// ignore_for_file: use_build_context_synchronously
+
 import 'package:alarm_test_final/Alarm/alarm_service.dart';
 import 'package:alarm_test_final/model/medicine_model.dart';
 import 'package:flutter/material.dart';
@@ -115,7 +117,7 @@ class AddMedicineScreenState extends State<AddMedicineScreen> {
   Future<void> _selectEndDate() async {
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: _selectedEndDate ?? DateTime.now(),
+      initialDate: _selectedEndDate ?? DateTime.now().add(Duration(days: 30)),
       firstDate: DateTime.now(),
       lastDate: DateTime(2100),
       builder: (BuildContext context, Widget? child) {
@@ -139,8 +141,7 @@ class AddMedicineScreenState extends State<AddMedicineScreen> {
     }
   }
 
-void _saveMedicine() async {
-    // Validate if date is selected
+  void _saveMedicine() async {
     if (_selectedEndDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -152,7 +153,6 @@ void _saveMedicine() async {
     }
 
     if (_formKey.currentState!.validate()) {
-      // Show loading indicator
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -171,6 +171,7 @@ void _saveMedicine() async {
           intakeTime: _selectedIntakeTime,
           color: _selectedColor,
           isActive: true,
+          isTaken: false,
           createdAt: DateTime.now(),
           endDate: _selectedEndDate!,
         );
@@ -178,21 +179,17 @@ void _saveMedicine() async {
         final dbHelper = DatabaseHelper();
         final medicineId = await dbHelper.insertMedicine(newMedicine);
 
-        // Create new medicine with ID using copyWith
         final medicineWithId = newMedicine.copyWith(id: medicineId);
 
-        // SET ALARMS FOR THE MEDICINE
         final alarmService = MedicineAlarmService();
         final alarmSuccess = await alarmService.setMedicineAlarms(
           medicineWithId,
         );
 
-        // Close loading dialog
         if (Navigator.of(context).canPop()) {
           Navigator.of(context).pop();
         }
 
-        // Show success message
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -204,15 +201,12 @@ void _saveMedicine() async {
           ),
         );
 
-        // Call callback and navigate back
         widget.onMedicineAdded?.call();
 
-        // Ensure we pop the screen
         if (Navigator.of(context).canPop()) {
           Navigator.of(context).pop();
         }
       } catch (e) {
-        // Close loading dialog on error
         if (Navigator.of(context).canPop()) {
           Navigator.of(context).pop();
         }
@@ -229,7 +223,7 @@ void _saveMedicine() async {
   }
 
   String _formatTime(TimeOfDay time) {
-    final hour = time.hourOfPeriod;
+    final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
     final minute = time.minute.toString().padLeft(2, '0');
     final period = time.period == DayPeriod.am ? 'AM' : 'PM';
     return '$hour:$minute $period';
@@ -274,15 +268,14 @@ void _saveMedicine() async {
             filled: true,
             fillColor: Colors.grey[50],
           ),
-          validator:
-              isRequired
-                  ? (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'This field is required';
-                    }
-                    return null;
+          validator: isRequired
+              ? (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'This field is required';
                   }
-                  : null,
+                  return null;
+                }
+              : null,
         ),
         SizedBox(height: 16),
       ],
@@ -359,10 +352,9 @@ void _saveMedicine() async {
               color: Colors.grey[50],
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color:
-                    _selectedEndDate == null
-                        ? Color.fromARGB(255, 247, 101, 90)
-                        : Colors.grey[300]!,
+                color: _selectedEndDate == null
+                    ? Color.fromARGB(255, 247, 101, 90)
+                    : Colors.grey[300]!,
               ),
             ),
             child: Row(
@@ -374,10 +366,9 @@ void _saveMedicine() async {
                       ? _formatDate(_selectedEndDate!)
                       : 'Select end date',
                   style: TextStyle(
-                    color:
-                        _selectedEndDate == null
-                            ? Colors.grey[500]
-                            : Colors.grey[700],
+                    color: _selectedEndDate == null
+                        ? Colors.grey[500]
+                        : Colors.grey[700],
                     fontSize: 16,
                   ),
                 ),
@@ -432,10 +423,9 @@ void _saveMedicine() async {
                   subtitle: Text(
                     '${_frequencyTimeCounts[frequency]} times per day',
                   ),
-                  trailing:
-                      _selectedFrequency == frequency
-                          ? Icon(Icons.check, color: Color(0xFF667EEA))
-                          : null,
+                  trailing: _selectedFrequency == frequency
+                      ? Icon(Icons.check, color: Color(0xFF667EEA))
+                      : null,
                   onTap: () {
                     setState(() {
                       _selectedFrequency = frequency;
@@ -480,10 +470,9 @@ void _saveMedicine() async {
                 return ListTile(
                   leading: Icon(_getTypeIcon(type)),
                   title: Text(type),
-                  trailing:
-                      _selectedType == type
-                          ? Icon(Icons.check, color: Color(0xFF667EEA))
-                          : null,
+                  trailing: _selectedType == type
+                      ? Icon(Icons.check, color: Color(0xFF667EEA))
+                      : null,
                   onTap: () {
                     setState(() {
                       _selectedType = type;
@@ -527,10 +516,9 @@ void _saveMedicine() async {
                 return ListTile(
                   leading: Icon(_getIntakeTimeIcon(time)),
                   title: Text(time),
-                  trailing:
-                      _selectedIntakeTime == time
-                          ? Icon(Icons.check, color: Color(0xFF667EEA))
-                          : null,
+                  trailing: _selectedIntakeTime == time
+                      ? Icon(Icons.check, color: Color(0xFF667EEA))
+                      : null,
                   onTap: () {
                     setState(() {
                       _selectedIntakeTime = time;
@@ -649,32 +637,29 @@ void _saveMedicine() async {
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children:
-              _availableColors.map((color) {
-                return GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedColor = color;
-                    });
-                  },
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: color,
-                      shape: BoxShape.circle,
-                      border:
-                          _selectedColor == color
-                              ? Border.all(color: Colors.black, width: 3)
-                              : Border.all(color: Colors.grey[300]!, width: 2),
-                    ),
-                    child:
-                        _selectedColor == color
-                            ? Icon(Icons.check, color: Colors.white, size: 20)
-                            : null,
-                  ),
-                );
-              }).toList(),
+          children: _availableColors.map((color) {
+            return GestureDetector(
+              onTap: () {
+                setState(() {
+                  _selectedColor = color;
+                });
+              },
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
+                  border: _selectedColor == color
+                      ? Border.all(color: Colors.black, width: 3)
+                      : Border.all(color: Colors.grey[300]!, width: 2),
+                ),
+                child: _selectedColor == color
+                    ? Icon(Icons.check, color: Colors.white, size: 20)
+                    : null,
+              ),
+            );
+          }).toList(),
         ),
         SizedBox(height: 16),
       ],

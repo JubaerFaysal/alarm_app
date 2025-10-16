@@ -19,7 +19,7 @@ class DatabaseHelper {
     String path = join(await getDatabasesPath(), 'medicines.db');
     return await openDatabase(
       path,
-      version: 2,
+      version: 3, // Updated version
       onCreate: _createDatabase,
       onUpgrade: _upgradeDatabase,
     );
@@ -39,8 +39,9 @@ class DatabaseHelper {
         intakeTime TEXT NOT NULL,
         color INTEGER NOT NULL,
         isActive INTEGER NOT NULL DEFAULT 1,
+        isTaken INTEGER NOT NULL DEFAULT 0,
         createdAt TEXT NOT NULL,
-        endDate TEXT
+        endDate TEXT NOT NULL
       )
     ''');
   }
@@ -53,64 +54,104 @@ class DatabaseHelper {
     if (oldVersion < 2) {
       await db.execute('ALTER TABLE medicines ADD COLUMN endDate TEXT');
     }
+    if (oldVersion < 3) {
+      await db.execute(
+        'ALTER TABLE medicines ADD COLUMN isTaken INTEGER NOT NULL DEFAULT 0',
+      );
+    }
   }
 
-  // Insert medicine
   Future<int> insertMedicine(Medicine medicine) async {
-    final db = await database;
-    return await db.insert('medicines', medicine.toMap());
+    try {
+      final db = await database;
+      return await db.insert('medicines', medicine.toMap());
+    } catch (e) {
+      print('❌ Error inserting medicine: $e');
+      rethrow;
+    }
   }
 
-  // Get all medicines
   Future<List<Medicine>> getMedicines() async {
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'medicines',
-      orderBy: 'createdAt DESC',
-    );
-    return List.generate(maps.length, (i) {
-      return Medicine.fromMap(maps[i]);
-    });
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.query(
+        'medicines',
+        orderBy: 'createdAt DESC',
+      );
+      return List.generate(maps.length, (i) => Medicine.fromMap(maps[i]));
+    } catch (e) {
+      print('❌ Error getting medicines: $e');
+      rethrow;
+    }
   }
 
-  // Update medicine
   Future<int> updateMedicine(Medicine medicine) async {
-    final db = await database;
-    return await db.update(
-      'medicines',
-      medicine.toMap(),
-      where: 'id = ?',
-      whereArgs: [medicine.id],
-    );
+    try {
+      final db = await database;
+      return await db.update(
+        'medicines',
+        medicine.toMap(),
+        where: 'id = ?',
+        whereArgs: [medicine.id],
+      );
+    } catch (e) {
+      print('❌ Error updating medicine: $e');
+      rethrow;
+    }
   }
 
-  // Delete medicine
   Future<int> deleteMedicine(int id) async {
-    final db = await database;
-    return await db.delete('medicines', where: 'id = ?', whereArgs: [id]);
+    try {
+      final db = await database;
+      return await db.delete('medicines', where: 'id = ?', whereArgs: [id]);
+    } catch (e) {
+      print('❌ Error deleting medicine: $e');
+      rethrow;
+    }
   }
 
-  // Toggle medicine status
   Future<int> toggleMedicineStatus(int id, bool isActive) async {
-    final db = await database;
-    return await db.update(
-      'medicines',
-      {'isActive': isActive ? 1 : 0},
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    try {
+      final db = await database;
+      return await db.update(
+        'medicines',
+        {'isActive': isActive ? 1 : 0},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    } catch (e) {
+      print('❌ Error toggling medicine status: $e');
+      rethrow;
+    }
   }
 
-  // Get active medicines (for alarm scheduling)
+  Future<int> markMedicineAsTaken(int id, bool isTaken) async {
+    try {
+      final db = await database;
+      return await db.update(
+        'medicines',
+        {'isTaken': isTaken ? 1 : 0},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    } catch (e) {
+      print('❌ Error marking medicine as taken: $e');
+      rethrow;
+    }
+  }
+
   Future<List<Medicine>> getActiveMedicines() async {
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'medicines',
-      where: 'isActive = ?',
-      whereArgs: [1],
-    );
-    return List.generate(maps.length, (i) {
-      return Medicine.fromMap(maps[i]);
-    });
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.query(
+        'medicines',
+        where: 'isActive = ?',
+        whereArgs: [1],
+      );
+      return List.generate(maps.length, (i) => Medicine.fromMap(maps[i]));
+    } catch (e) {
+      print('❌ Error getting active medicines: $e');
+      rethrow;
+    }
   }
 }
